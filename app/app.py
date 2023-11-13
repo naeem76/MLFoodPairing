@@ -17,8 +17,15 @@ from flask import make_response, current_app, render_template
 
 import nltk
 import pycrfsuite
+from nltk.stem import WordNetLemmatizer
 
 __version__ = '1.0'
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
+nltk.download('wordnet')
+
+lemmatizer = WordNetLemmatizer()
+
 
 
 def crossdomain(origin=None, methods=None, headers=None,
@@ -160,6 +167,33 @@ def parse(phrase):
         out.append((token, tag, prediction))
     return out
 
+def get_ingredient(tokens):
+    '''Transforms a list of tagged predicted tokens to a ingredient string
+
+    Args:
+        tokens (list): list of tuples (token, tag, predicted label).
+
+    Returns:
+        str containing the parsed ingredient name
+    '''
+    return ' '.join(token for token, _, label in tokens if label == 'NAME')
+
+
+def get_ingredient_from_phrase(phrase):
+    '''Parse ingredient phrase to quantity, units and ingredients and returns
+    ingredient string.
+
+    Args:
+        phrase (str): ingredient phrase, e.g. `3 cups milk`
+
+    Returns:
+        str containing the parsed ingredient name
+    '''
+    return lemmatizer.lemmatize( get_ingredient(parse(phrase)) )
+
+def words(line):
+    for word in line.strip().split(' '):
+        yield word
 
 # Main route
 @app.route('/')
@@ -174,12 +208,33 @@ def index():
 def parseroute():
     '''Main flask route
     '''
-    ing = request.values.get('q', None)
+    #ing = request.values.get('q', None)
+    ing = request.get_json()
     if ing is None:
         return abort(400)
 
-    tokens = parse(ing)
-    return jsonify(tokens)
+    print("rocks :", lemmatizer.lemmatize("rocks"))
+
+    #tokens = parse(ing[0])
+    data = []
+    for value in ing:
+        obj =  {
+            "text": "",
+            "parsed_text": "",
+            "parsed_lemma_text" : "",
+        }
+        obj['text'] = value
+
+        line = get_ingredient_from_phrase(value)
+        test = list(map(lemmatizer.lemmatize, words(line)))
+        obj['parsed_lemma_text'] = ' '.join(test)
+        obj['parsed_text'] = line
+
+        data.append(obj)
+
+    #test1 = get_ingredient_from_phrase(tokens)
+
+    return jsonify(data)
 
 
 # # form submission route
